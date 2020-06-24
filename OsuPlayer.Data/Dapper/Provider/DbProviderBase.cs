@@ -1,15 +1,17 @@
 ﻿using Dapper;
+using Milky.OsuPlayer.Data.Dapper.ORM;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading;
 
 namespace Milky.OsuPlayer.Data.Dapper.Provider
 {
-    public abstract class DbProviderBase : IDisposable
+    public abstract partial class DbProviderBase : IDisposable
     {
         /// <summary>
         /// 当数据库状态更改时发生。
@@ -27,6 +29,8 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
         public virtual string ConnectionString => string.IsNullOrWhiteSpace(_overrideConnectionString)
             ? DbConnectionStringBuilder.ConnectionString
             : _overrideConnectionString;
+
+        public virtual WhereBuilder WhereBuilder { get; set; }
 
         /// <summary>
         /// 是否设置了连接字符串。
@@ -51,11 +55,6 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
         /// </summary>
         public virtual ConnectionState State => SingletonConnection.State;
 
-        /// <summary>
-        /// 获取数据最大的条数
-        /// </summary>
-        public virtual int MaxDataCount { get; set; } = int.MaxValue;
-
         protected DbConnectionStringBuilder DbConnectionStringBuilder;
 
         private string _overrideConnectionString;
@@ -69,7 +68,7 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
         private List<string> _cachedTables;
         private readonly Dictionary<string, List<string>> _cachedColDic = new Dictionary<string, List<string>>();
 
-        protected virtual DbConnection SingletonConnection // 单例DbConnection实例
+        protected internal virtual DbConnection SingletonConnection // 单例DbConnection实例
         {
             get
             {
@@ -155,6 +154,7 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
         /// 测试连接
         /// </summary>
         /// <returns></returns>
+        [Obsolete("Use async method '" + nameof(TestConnectionAsync) + "' instead")]
         public virtual bool TestConnection()
         {
             try
@@ -162,7 +162,7 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
                 GetAllTables();
                 return true;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return false;
             }
@@ -177,6 +177,7 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
         /// <param name="asc">是否升序</param>
         /// <param name="count">查询条数（已被MaxDataCount所限）</param>
         /// <returns></returns>
+        [Obsolete("Use async method '" + nameof(GetDataTableAsync) + "' instead")]
         public virtual DataTable GetDataTable(
             string table,
             IReadOnlyCollection<string> columns = null,
@@ -197,6 +198,7 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
         /// <param name="whereCondition">查询条件</param>
         /// <param name="count">查询条数（已被MaxDataCount所限）</param>
         /// <returns></returns>
+        [Obsolete("Use async method '" + nameof(GetDataTableAsync) + "' instead")]
         public virtual DataTable GetDataTable(
             string table,
             Where whereCondition,
@@ -218,6 +220,7 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
         /// <param name="whereConditions">查询条件</param>
         /// <param name="count">查询条数（已被MaxDataCount所限）</param>
         /// <returns></returns>
+        [Obsolete("Use async method '" + nameof(GetDataTableAsync) + "' instead")]
         public virtual DataTable GetDataTable(
             string table,
             IReadOnlyCollection<Where> whereConditions,
@@ -232,21 +235,15 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
             }
 
             GetWhereStrAndParameters(whereConditions, out var whereStr, out var @params);
-            FixCount(ref count);
             var cmdText = GetSelectCommandTemplate(table, columns, orderColumn, whereStr, count, asc);
             try
             {
                 IDataReader reader;
-                //var dt = new DataTable();
                 if (UseSingletonConnection)
                 {
                     reader = @params == null
                         ? SingletonConnection.ExecuteReader(cmdText)
                         : SingletonConnection.ExecuteReader(cmdText, @params);
-                    //var result = @params == null
-                    //    ? SingletonConnection.Query(cmdText)
-                    //    : SingletonConnection.Query(cmdText, @params);
-                    //ManualToDataTable(result, dt);
                     if (!KeepSingletonConnectionOpen) SingletonConnection.Close();
                 }
                 else
@@ -256,10 +253,6 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
                         reader = @params == null
                             ? dbConn.ExecuteReader(cmdText)
                             : dbConn.ExecuteReader(cmdText, @params);
-                        //var result = @params == null
-                        //    ? SingletonConnection.Query(cmdText)
-                        //    : SingletonConnection.Query(cmdText, @params);
-                        //ManualToDataTable(result, dt);
                     }
                 }
 
@@ -272,29 +265,7 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
             catch (Exception ex)
             {
                 throw new Exception($"从{DbType}数据库中获取数据出错：\r\n" +
-                                    $"数据库执行语句：{cmdText}", ex);
-            }
-        }
-
-        private static void ManualToDataTable(IEnumerable<dynamic> result, DataTable dt)
-        {
-            if (result?.Any() == true)
-            {
-                foreach (var o in result.First())
-                {
-                    dt.Columns.Add(o.Key);
-                }
-            }
-
-            foreach (var o in result)
-            {
-                DataRow dr = dt.NewRow();
-                foreach (var item in o)
-                {
-                    dr[item.Key] = item.Value;
-                }
-
-                dt.Rows.Add(dr);
+                                    $"数据库执行语句：{cmdText}", ex.InnerException ?? ex);
             }
         }
 
@@ -307,6 +278,7 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
         /// <param name="asc">是否升序</param>
         /// <param name="count">查询条数（已被MaxDataCount所限）</param>
         /// <returns></returns>
+        [Obsolete("Use async method '" + nameof(QueryAsync) + "' instead")]
         public virtual IEnumerable<T> Query<T>(
             string table,
             IReadOnlyCollection<string> columns = null,
@@ -327,6 +299,7 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
         /// <param name="whereCondition">查询条件</param>
         /// <param name="count">查询条数（已被MaxDataCount所限）</param>
         /// <returns></returns>
+        [Obsolete("Use async method '" + nameof(QueryAsync) + "' instead")]
         public virtual IEnumerable<T> Query<T>(
             string table,
             Where whereCondition,
@@ -348,6 +321,7 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
         /// <param name="whereConditions">查询条件</param>
         /// <param name="count">查询条数（已被MaxDataCount所限）</param>
         /// <returns></returns>
+        [Obsolete("Use async method '" + nameof(QueryAsync) + "' instead")]
         public virtual IEnumerable<T> Query<T>(
             string table,
             IReadOnlyCollection<Where> whereConditions,
@@ -362,8 +336,6 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
             }
 
             GetWhereStrAndParameters(whereConditions, out var whereStr, out var @params);
-            FixCount(ref count);
-
             var sql = GetSelectCommandTemplate(table, columns, orderColumn, whereStr, count, asc);
 
             try
@@ -374,7 +346,7 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
             catch (Exception ex)
             {
                 throw new Exception($"从{DbType}数据库中获取数据出错：\r\n" +
-                                    $"数据库执行语句：{sql}", ex);
+                                    $"数据库执行语句：{sql}", ex.InnerException ?? ex);
             }
         }
 
@@ -387,6 +359,7 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
         /// <param name="asc">是否升序</param>
         /// <param name="count">查询条数（已被MaxDataCount所限）</param>
         /// <returns></returns>
+        [Obsolete("Use async method '" + nameof(QueryAsync) + "' instead")]
         public virtual IEnumerable<dynamic> Query(
             string table,
             IReadOnlyCollection<string> columns = null,
@@ -407,6 +380,7 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
         /// <param name="whereCondition">查询条件</param>
         /// <param name="count">查询条数（已被MaxDataCount所限）</param>
         /// <returns></returns>
+        [Obsolete("Use async method '" + nameof(QueryAsync) + "' instead")]
         public virtual IEnumerable<dynamic> Query(
             string table,
             Where whereCondition,
@@ -428,6 +402,7 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
         /// <param name="whereConditions">查询条件</param>
         /// <param name="count">查询条数（已被MaxDataCount所限）</param>
         /// <returns></returns>
+        [Obsolete("Use async method '" + nameof(QueryAsync) + "' instead")]
         public virtual IEnumerable<dynamic> Query(
             string table,
             IReadOnlyCollection<Where> whereConditions = null,
@@ -439,6 +414,7 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
             return Query<dynamic>(table, whereConditions, columns, orderColumn, count, asc);
         }
 
+        [Obsolete("Use async method '" + nameof(UpdateAsync) + "' instead")]
         public virtual int Update(string table,
             Dictionary<string, object> updateColumns,
             Where whereCondition)
@@ -446,6 +422,7 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
             return Update(table, updateColumns, new[] { whereCondition });
         }
 
+        [Obsolete("Use async method '" + nameof(UpdateAsync) + "' instead")]
         public virtual int Update(string table,
             Dictionary<string, object> updateColumns,
             IReadOnlyCollection<Where> whereConditions,
@@ -455,16 +432,17 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
         {
             if (updateColumns == null || updateColumns.Count == 0)
                 throw new ArgumentException("请提供更新字段");
-            //if (whereConditions == null || whereConditions.Count == 0)
-            //    throw new ArgumentException("请提供更新记录的Where依据");
+            if (whereConditions == null || whereConditions.Count == 0)
+                throw new ArgumentException("请提供更新记录的Where依据");
             if (!VerifyTableAndColumn(table, updateColumns.Keys.ToList(), null, whereConditions, out var keyword))
                 throw new ArgumentException($"不存在表或者相关列名：{keyword}");
 
             GetWhereStrAndParameters(whereConditions, out var whereStr, out var whereParams);
-            GetUpdateCommandTemplate(table, updateColumns, whereStr, whereParams, orderColumn, count, asc, out var sql, out var kvParams);
+            GetUpdateCommandTemplate(table, updateColumns, whereStr, whereParams, orderColumn, count, asc, out var sql,
+                out var @params);
             try
             {
-                var @params = ExpandParameters(whereParams, kvParams);
+                @params = ExpandObjects(whereParams, @params);
                 var result = InnerExecute(@params, sql);
 
                 return result;
@@ -472,10 +450,11 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
             catch (Exception ex)
             {
                 throw new Exception($"从{DbType}数据库中获取数据出错：\r\n" +
-                                    $"数据库执行语句：{sql}", ex);
+                                    $"数据库执行语句：{sql}", ex.InnerException ?? ex);
             }
         }
 
+        [Obsolete("Use async method '" + nameof(InsertAsync) + "' instead")]
         public virtual int Insert(string table, Dictionary<string, object> insertColumns)
         {
             if (insertColumns == null || insertColumns.Count == 0)
@@ -493,54 +472,17 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
             catch (Exception ex)
             {
                 throw new Exception($"从{DbType}数据库中获取数据出错：\r\n" +
-                                    $"数据库执行语句：{sql}", ex);
+                                    $"数据库执行语句：{sql}", ex.InnerException ?? ex);
             }
         }
 
-        public virtual int InsertArray(string table, ICollection<Dictionary<string, object>> insertColumns)
-        {
-            int count = 0;
-            if (SingletonConnection.State != ConnectionState.Open)
-                SingletonConnection.Open();
-            using (var transaction = SingletonConnection.BeginTransaction())
-            {
-                foreach (var insertColumn in insertColumns)
-                {
-                    if (insertColumn == null || insertColumn.Count == 0)
-                        throw new Exception("请提供插入字段");
-                    if (!VerifyTableAndColumn(table, insertColumn.Keys.ToList(), null, null, out var keyword))
-                        throw new Exception($"不存在表或者相关列名：{keyword}");
-
-                    GetInsertCommandTemplate(table, insertColumn, out var sql, out var @params);
-
-                    int result;
-
-                    try
-                    {
-                        result = @params == null
-                            ? SingletonConnection.Execute(sql)
-                            : SingletonConnection.Execute(sql, @params);
-                    }
-                    catch (Exception ex)
-                    {
-                        throw new Exception($"从{DbType}数据库中获取数据出错：\r\n" +
-                                            $"数据库执行语句：{sql}", ex);
-                    }
-
-                    count += result;
-                }
-
-                transaction.Commit();
-            }
-
-            return count;
-        }
-
+        [Obsolete("Use async method '" + nameof(DeleteAsync) + "' instead")]
         public virtual int Delete(string table, Where whereCondition)
         {
             return Delete(table, new[] { whereCondition });
         }
 
+        [Obsolete("Use async method '" + nameof(DeleteAsync) + "' instead")]
         public virtual int Delete(string table, IReadOnlyCollection<Where> whereConditions)
         {
             if (whereConditions == null || whereConditions.Count == 0)
@@ -559,35 +501,53 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
             catch (Exception ex)
             {
                 throw new Exception($"从{DbType}数据库中获取数据出错：\r\n" +
-                                    $"数据库执行语句：{sql}", ex);
+                                    $"数据库执行语句：{sql}", ex.InnerException ?? ex);
             }
         }
 
-        public virtual void Dispose()
+        /// <summary>
+        /// 释放<see cref="DbProviderBase"/>的资源。
+        /// </summary>
+        public void Dispose()
         {
             SingletonConnection?.Dispose();
             _rwLock?.Dispose();
             StateChange = null;
+            ProtectedDispose();
         }
 
-        // 获取数据库中所有的表
+        /// <summary>
+        /// 获取数据库中所有的表
+        /// </summary>
+        /// <returns></returns>
+        [Obsolete("Use async method '" + nameof(GetAllTablesAsync) + "' instead")]
         public List<string> GetAllTables()
         {
-            List<string> innerGetAllTables;
-            if (UseSingletonConnection)
+            string sqlStr = null;
+            try
             {
-                innerGetAllTables = InnerGetAllTables(SingletonConnection);
-                if (!KeepSingletonConnectionOpen) SingletonConnection.Close();
-            }
-            else
-            {
-                var dbConn = GetNewDbConnection();
-                innerGetAllTables = InnerGetAllTables(dbConn);
-            }
+                List<string> innerGetAllTables;
+                if (UseSingletonConnection)
+                {
+                    innerGetAllTables = InnerGetAllTables(SingletonConnection, out sqlStr);
 
-            return innerGetAllTables;
+                    if (!KeepSingletonConnectionOpen) SingletonConnection.Close();
+                }
+                else
+                {
+                    var dbConn = GetNewDbConnection();
+                    innerGetAllTables = InnerGetAllTables(dbConn, out sqlStr);
+                }
+
+                return innerGetAllTables;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"获取数据库中表名出错（{sqlStr}）", ex.InnerException ?? ex);
+            }
         }
 
+        [Obsolete("Use async method '" + nameof(GetAllTablesAsync) + "' instead")]
         public List<string> GetAllTables(bool useCache)
         {
             if (useCache && _cachedTables != null)
@@ -600,23 +560,33 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
             return _cachedTables;
         }
 
+        [Obsolete("Use async method '" + nameof(GetColumnsByTableAsync) + "' instead")]
         public List<string> GetColumnsByTable(string tableName)
         {
-            List<string> columns;
-            if (UseSingletonConnection)
+            string sqlStr = null;
+            try
             {
-                columns = InnerGetColumnsByTable(SingletonConnection, tableName);
-                if (!KeepSingletonConnectionOpen) SingletonConnection.Close();
-            }
-            else
-            {
-                var dbConn = GetNewDbConnection();
-                columns = InnerGetColumnsByTable(dbConn, tableName);
-            }
+                List<string> columns;
+                if (UseSingletonConnection)
+                {
+                    columns = InnerGetColumnsByTable(SingletonConnection, tableName, out sqlStr);
+                    if (!KeepSingletonConnectionOpen) SingletonConnection.Close();
+                }
+                else
+                {
+                    var dbConn = GetNewDbConnection();
+                    columns = InnerGetColumnsByTable(dbConn, tableName, out sqlStr);
+                }
 
-            return columns;
+                return columns;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"获取数据表{tableName}中字段名出错（{sqlStr}）", ex.InnerException ?? ex);
+            }
         }
 
+        [Obsolete("Use async method '" + nameof(GetColumnsByTableAsync) + "' instead")]
         public List<string> GetColumnsByTable(string tableName, bool useCache)
         {
             if (useCache && _cachedColDic.ContainsKey(tableName))
@@ -634,26 +604,45 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
             DefaultTypeMap.MatchNamesWithUnderscores = true;
         }
 
-        protected abstract DbConnection GetNewDbConnection();
+        protected internal abstract List<string> InnerGetAllTables(DbConnection dbConnection, out string sqlStr);
 
-        protected internal abstract List<string> InnerGetAllTables(DbConnection dbConnection);
+        protected internal abstract List<string> InnerGetColumnsByTable(DbConnection dbConnection, string tableName, out string sqlStr);
 
-        protected internal abstract List<string> InnerGetColumnsByTable(DbConnection dbConnection, string tableName);
+        protected virtual DbConnection GetNewDbConnection()
+        {
+            throw new NotImplementedException();
+        }
 
-        protected abstract string GetSelectCommandTemplate(string table, IReadOnlyCollection<string> columns,
+        protected virtual string GetSelectCommandTemplate(string table, IReadOnlyCollection<string> columns,
             string orderColumn, string whereStr,
-            int count, bool asc);
+            int count, bool asc)
+        {
+            throw new NotImplementedException();
+        }
 
-        protected abstract void GetUpdateCommandTemplate(string table, Dictionary<string, object> updateColumns,
+        protected virtual void GetUpdateCommandTemplate(string table, Dictionary<string, object> updateColumns,
             string whereStr, DynamicParameters whereParams,
             string orderColumn,
             int count,
-            bool asc, out string sql, out DynamicParameters kvParams);
+            bool asc, out string sql, out DynamicParameters @params)
+        {
+            throw new NotImplementedException();
+        }
 
-        protected abstract void GetInsertCommandTemplate(string table, Dictionary<string, object> insertColumns,
-            out string sql, out DynamicParameters kvParams);
+        protected virtual void GetInsertCommandTemplate(string table, Dictionary<string, object> insertColumns,
+            out string sql, out DynamicParameters @params)
+        {
+            throw new NotImplementedException();
+        }
 
-        protected abstract string GetDeleteCommandTemplate(string table, string whereStr);
+        protected virtual string GetDeleteCommandTemplate(string table, string whereStr)
+        {
+            throw new NotImplementedException();
+        }
+
+        protected virtual void ProtectedDispose()
+        {
+        }
 
         private void SignUpDbConnection()
         {
@@ -683,7 +672,8 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
             return VerifyTable(table, out keyword) && VerifyColumns(table, allColumns, out keyword);
         }
 
-        private void GetWhereStrAndParameters(IReadOnlyCollection<Where> whereConditions, out string whereStr,
+        private void GetWhereStrAndParameters(IReadOnlyCollection<Where> whereConditions,
+            out string whereStr,
             out DynamicParameters @params)
         {
             whereStr = "1 = 1";
@@ -696,6 +686,7 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
 
             @params = new DynamicParameters();
             var existColumn = new HashSet<string>();
+
             foreach (var kvp in whereConditions)
             {
                 if (kvp.Value is null) continue;
@@ -714,11 +705,26 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
                         newStr = kvp.ColumnName + j;
                     }
 
-                    kvp.ColumnName = newStr;
+                    kvp.ColumnNameOther = newStr;
                     existColumn.Add(newStr);
                 }
 
-                @params.Add(kvp.ColumnName, kvp.Value);
+
+                switch (kvp.WhereType)
+                {
+                    case WhereType.LikeAll:
+                        @params.Add(kvp.ColumnNameOther, $"%{kvp.Value}%");
+                        break;
+                    case WhereType.LikeAtEnd:
+                        @params.Add(kvp.ColumnNameOther, $"%{kvp.Value}");
+                        break;
+                    case WhereType.LikeAtBegin:
+                        @params.Add(kvp.ColumnNameOther, $"{kvp.Value}%");
+                        break;
+                    default:
+                        @params.Add(kvp.ColumnNameOther, kvp.Value);
+                        break;
+                }
             }
 
             var sb = new StringBuilder();
@@ -733,58 +739,62 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
                 var columnName = condition.ColumnName;
                 var valueQuote = "";
 
-                switch (DbType)
-                {
-                    case DataBaseType.Access:
-                        if (condition.ForceKeyType.HasValue)
-                        {
-                            valueQuote =
-                                (condition.ForceKeyType == System.Data.DbType.Time ||
-                                 condition.ForceKeyType == System.Data.DbType.DateTime ||
-                                 condition.ForceKeyType == System.Data.DbType.DateTime2 ||
-                                 condition.ForceKeyType == System.Data.DbType.DateTimeOffset)
-                                    ? ""
-                                    : "";
-                        }
-                        else
-                        {
-                            valueQuote =
-                                (condition.Value is DateTime ||
-                                 condition.Value is DateTimeOffset)
-                                    ? ""
-                                    : "";
-                        }
+                #region Not used
 
-                        break;
-                    case DataBaseType.Sqlite:
-                    case DataBaseType.SqlServer:
-                        if (condition.ForceKeyType.HasValue)
-                        {
-                            valueQuote =
-                                (condition.ForceKeyType == System.Data.DbType.String ||
-                                 condition.ForceKeyType == System.Data.DbType.StringFixedLength ||
-                                 condition.ForceKeyType == System.Data.DbType.AnsiString ||
-                                 condition.ForceKeyType == System.Data.DbType.AnsiStringFixedLength
-                                )
-                                    ? ""
-                                    : "";
-                        }
-                        else
-                        {
-                            valueQuote =
-                                (condition.Value is string ||
-                                 condition.Value is char)
-                                    ? ""
-                                    : "";
-                        }
+                //switch (DbType)
+                //{
+                //    case DataBaseType.Access:
+                //        if (condition.ForceKeyType.HasValue)
+                //        {
+                //            valueQuote =
+                //                (condition.ForceKeyType == System.Data.DbType.Time ||
+                //                 condition.ForceKeyType == System.Data.DbType.DateTime ||
+                //                 condition.ForceKeyType == System.Data.DbType.DateTime2 ||
+                //                 condition.ForceKeyType == System.Data.DbType.DateTimeOffset)
+                //                    ? ""
+                //                    : "";
+                //        }
+                //        else
+                //        {
+                //            valueQuote =
+                //                (condition.Value is DateTime ||
+                //                 condition.Value is DateTimeOffset)
+                //                    ? ""
+                //                    : "";
+                //        }
 
-                        break;
-                    case DataBaseType.MySql:
-                        valueQuote = "";
-                        break;
-                    default:
-                        throw new ArgumentOutOfRangeException(nameof(DbType));
-                }
+                //        break;
+                //    case DataBaseType.Sqlite:
+                //    case DataBaseType.SqlServer:
+                //        if (condition.ForceKeyType.HasValue)
+                //        {
+                //            valueQuote =
+                //                (condition.ForceKeyType == System.Data.DbType.String ||
+                //                 condition.ForceKeyType == System.Data.DbType.StringFixedLength ||
+                //                 condition.ForceKeyType == System.Data.DbType.AnsiString ||
+                //                 condition.ForceKeyType == System.Data.DbType.AnsiStringFixedLength
+                //                )
+                //                    ? ""
+                //                    : "";
+                //        }
+                //        else
+                //        {
+                //            valueQuote =
+                //                (condition.Value is string ||
+                //                 condition.Value is char)
+                //                    ? ""
+                //                    : "";
+                //        }
+
+                //        break;
+                //    case DataBaseType.MySql:
+                //        valueQuote = "";
+                //        break;
+                //    default:
+                //        throw new ArgumentOutOfRangeException(nameof(DbType));
+                //}
+
+                #endregion
 
                 if (condition.Value is null)
                 {
@@ -806,10 +816,12 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
                 }
                 else
                 {
-                    sb.Append(string.Format("[{0}] {1} {2}@{3}{4}",
+                    sb.Append(string.Format("{0} {1} {2}@{3}{4}",
                         columnName,
                         Where.GetTypeSymbol(condition.WhereType),
-                        valueQuote, columnName, valueQuote));
+                        valueQuote,
+                        condition.ColumnNameOther,
+                        valueQuote));
                 }
 
                 i++;
@@ -820,7 +832,8 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
 
         private bool VerifyColumns(string table, IEnumerable<string> columns, out string keyword)
         {
-            var set = _whiteListInfo[table];
+            var set = _whiteListInfo.FirstOrDefault(k => k.Key.Equals(table, StringComparison.OrdinalIgnoreCase)).Value;
+            //var set = _whiteListInfo[table];
             var arrColumns = columns.ToArray();
             if (arrColumns.Any(k => !set.Contains(k)))
             {
@@ -873,7 +886,8 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
                 }
             }
 
-            if (!newTableList.Contains(table))
+            if (!newTableList.Contains(table, StringComparer.OrdinalIgnoreCase))
+            //if (!newTableList.Contains(table))
             {
                 keyword = table;
                 return false;
@@ -883,90 +897,117 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
             return true;
         }
 
-        private int InnerExecute(DynamicParameters @params, string sql)
-        {
-            int result;
-            if (UseSingletonConnection)
-            {
-                result = @params == null
-                    ? SingletonConnection.Execute(sql)
-                    : SingletonConnection.Execute(sql, @params);
-
-                if (!KeepSingletonConnectionOpen)
-                    SingletonConnection.Close();
-            }
-            else
-            {
-                using (var dbConn = GetNewDbConnection())
-                {
-                    result = @params == null
-                        ? dbConn.Execute(sql)
-                        : dbConn.Execute(sql, @params);
-                }
-            }
-
-            return result;
-        }
-
         private IEnumerable<T> InnerQuery<T>(DynamicParameters @params, string sql)
         {
-            IEnumerable<T> result;
-            if (UseSingletonConnection)
+#if DEBUG
+            var sw = Stopwatch.StartNew();
+#endif
+            try
             {
-                result = @params == null
-                    ? SingletonConnection.Query<T>(sql)
-                    : SingletonConnection.Query<T>(sql, @params);
-
-                if (!KeepSingletonConnectionOpen)
-                    SingletonConnection.Close();
-            }
-            else
-            {
-                using (var dbConn = GetNewDbConnection())
+                IEnumerable<T> result;
+                if (UseSingletonConnection)
                 {
                     result = @params == null
-                        ? dbConn.Query<T>(sql)
-                        : dbConn.Query<T>(sql, @params);
+                        ? SingletonConnection.Query<T>(sql)
+                        : SingletonConnection.Query<T>(sql, @params);
+
+                    if (!KeepSingletonConnectionOpen)
+                        SingletonConnection.Close();
                 }
+                else
+                {
+                    using (var dbConn = GetNewDbConnection())
+                    {
+                        result = @params == null
+                            ? dbConn.Query<T>(sql)
+                            : dbConn.Query<T>(sql, @params);
+                    }
+                }
+
+                return result;
             }
-
-            return result;
+            finally
+            {
+#if DEBUG
+                if (@params == null || !@params.ParameterNames.Any())
+                {
+                    Console.WriteLine($"Queried SQL: '{sql}' in {sw.Elapsed.TotalMilliseconds} ms.");
+                }
+                else
+                {
+                    Console.WriteLine("Queried SQL: '" + sql + "', Params: {" + string.Join(",",
+                        @params.ParameterNames.Select(k => k + ": " + @params.Get<object>(k))
+                    ) + "} in " + sw.Elapsed.TotalMilliseconds + " ms.");
+                }
+#endif
+            }
         }
 
-        private void FixCount(ref int count)
+        private int InnerExecute(DynamicParameters @params, string sql)
         {
-            count = MaxDataCount <= 0
-                ? count
-                : ((count > MaxDataCount || count <= 0)
-                    ? MaxDataCount
-                    : count);
+#if DEBUG
+            var sw = Stopwatch.StartNew();
+#endif
+            try
+            {
+                int result;
+                if (UseSingletonConnection)
+                {
+                    result = @params == null
+                        ? SingletonConnection.Execute(sql)
+                        : SingletonConnection.Execute(sql, @params);
+
+                    if (!KeepSingletonConnectionOpen)
+                        SingletonConnection.Close();
+                }
+                else
+                {
+                    using (var dbConn = GetNewDbConnection())
+                    {
+                        result = @params == null
+                            ? dbConn.Execute(sql)
+                            : dbConn.Execute(sql, @params);
+                    }
+                }
+
+                return result;
+            }
+            finally
+            {
+#if DEBUG
+                if (@params == null || !@params.ParameterNames.Any())
+                {
+                    Console.WriteLine($"Executed SQL: '{sql}' in {sw.Elapsed.TotalMilliseconds} ms.");
+                }
+                else
+                {
+                    Console.WriteLine("Executed SQL: '" + sql + "', Params: {" + string.Join(",",
+                        @params.ParameterNames.Select(k => k + ": " + @params.Get<object>(k))
+                    ) + "} in " + sw.Elapsed.TotalMilliseconds + " ms.");
+                }
+#endif
+            }
         }
 
-        private static DynamicParameters ExpandParameters(params DynamicParameters[] @params)
+        private static DynamicParameters ExpandObjects(params DynamicParameters[] @params)
         {
             if (@params.Length == 0)
                 return new DynamicParameters();
             var source = new DynamicParameters();
             foreach (var o in @params)
             {
-                if (o is null) continue;
-                foreach (var name in o.ParameterNames)
+                foreach (var key in o.ParameterNames)
                 {
-                    var value = o.Get<object>(name);
-                    source.Add(name, value);
+                    var value = o.Get<object>(key);
+                    if (!source.ParameterNames.Contains(key))
+                    {
+                        source.Add(key, value);
+                    }
+                    else
+                    {
+                        throw new Exception("对象存在重复键。");
+                    }
                 }
-
-                //foreach (var kv in o)
-                //{
-                //    if (!expandable.Contains(kv))
-                //    {
-                //        expandable.Add(kv);
-                //    }
-                //    else
-                //    {
-                //        throw new Exception("对象存在重复键。");
-                //    }
-                //}
             }
 
             return source;

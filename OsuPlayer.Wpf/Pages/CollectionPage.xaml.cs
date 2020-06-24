@@ -129,14 +129,14 @@ namespace Milky.OsuPlayer.Pages
             // todo
         }
 
-        private void MapListItem_MouseDoubleClick(object sender, RoutedEventArgs e)
+        private async void MapListItem_MouseDoubleClick(object sender, RoutedEventArgs e)
         {
-            PlaySelected();
+            await PlaySelected();
         }
 
-        private void ItemPlay_Click(object sender, RoutedEventArgs e)
+        private async void ItemPlay_Click(object sender, RoutedEventArgs e)
         {
-            PlaySelected();
+            await PlaySelected();
         }
 
         private async void ItemDelete_Click(object sender, RoutedEventArgs e)
@@ -144,7 +144,7 @@ namespace Milky.OsuPlayer.Pages
             if (MapList.SelectedItem == null)
                 return;
             var selected = MapList.SelectedItems;
-            var entries = ConvertToEntries(selected.Cast<BeatmapDataModel>());
+            var entries = await ConvertToEntries(selected.Cast<BeatmapDataModel>());
             foreach (var entry in entries)
             {
                 if (!_safeDbOperator.TryRemoveMapFromCollection(entry.GetIdentity(), ViewModel.CollectionInfo))
@@ -173,19 +173,19 @@ namespace Milky.OsuPlayer.Pages
             ExportPage.QueueEntries(_entries);
         }
 
-        private async void PlaySelected()
+        private async Task PlaySelected()
         {
-            var map = GetSelected();
+            var map = await GetSelected();
             if (map == null) return;
             await _controller.PlayNewAsync(map);
         }
 
-        private Beatmap GetSelected()
+        private async Task<Beatmap> GetSelected()
         {
             if (MapList.SelectedItem == null)
                 return null;
             var selectedItem = (BeatmapDataModel)MapList.SelectedItem;
-            return _safeDbOperator.GetBeatmapsFromFolder(selectedItem.FolderName)
+            return (await _safeDbOperator.GetBeatmapsFromFolder(selectedItem.FolderName))
                 .FirstOrDefault(k => k.Version == selectedItem.Version);
         }
 
@@ -195,15 +195,21 @@ namespace Milky.OsuPlayer.Pages
                 DialogOptionFactory.EditCollectionOptions);
         }
 
-        private Beatmap ConvertToEntry(BeatmapDataModel dataModel)
+        private async Task<Beatmap> ConvertToEntry(BeatmapDataModel dataModel)
         {
-            return _safeDbOperator.GetBeatmapsFromFolder(dataModel.FolderName)
+            return (await _safeDbOperator.GetBeatmapsFromFolder(dataModel.FolderName))
                 .FirstOrDefault(k => k.Version == dataModel.Version);
         }
 
-        private IEnumerable<Beatmap> ConvertToEntries(IEnumerable<BeatmapDataModel> dataModels)
+        private async Task<IEnumerable<Beatmap>> ConvertToEntries(IEnumerable<BeatmapDataModel> dataModels)
         {
-            return dataModels.Select(ConvertToEntry);
+            var list = new List<Beatmap>();
+            foreach (var dataModel in dataModels)
+            {
+                list.Add(await ConvertToEntry(dataModel));
+            }
+
+            return list;
         }
 
         private async void BtnPlayAll_Click(object sender, RoutedEventArgs e)

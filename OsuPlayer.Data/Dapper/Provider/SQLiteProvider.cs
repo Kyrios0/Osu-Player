@@ -22,43 +22,30 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
             return new SQLiteConnection(ConnectionString);
         }
 
-        protected internal override List<string> InnerGetAllTables(DbConnection dbConnection)
+        protected internal override List<string> InnerGetAllTables(DbConnection dbConnection,
+            out string sqlStr)
         {
-            string sqlStr = null;
-
-            try
-            {
-                sqlStr = "SELECT name FROM sqlite_master WHERE type='table'";
-                var list = dbConnection.Query<string>(sqlStr).ToList();
-                return list;
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"从数据库中获取数据出错：\r\n" +
-                                    $"数据库执行语句：{sqlStr}", ex);
-            }
+            sqlStr = "SELECT name FROM sqlite_master WHERE type='table'";
+            var list = dbConnection.Query<string>(sqlStr).ToList();
+            return list;
         }
 
-        protected internal override List<string> InnerGetColumnsByTable(DbConnection dbConnection, string tableName)
+        protected internal override List<string> InnerGetColumnsByTable(DbConnection dbConnection,
+            string tableName,
+            out string sqlStr)
         {
-            string sqlStr = null;
+            sqlStr = $"PRAGMA table_info(`{tableName}`)";
+            var list = dbConnection.Query(sqlStr).ToList();
 
-            try
-            {
-                sqlStr = $"PRAGMA table_info(`{tableName}`)";
-                var list = dbConnection.Query(sqlStr).ToList();
-
-                return list.Select(o => (string)o.name).ToList();
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"获取数据表{tableName}中字段名出错：\r\n" +
-                                    $"数据库执行语句：{sqlStr}", ex);
-            }
+            return list.Select(o => (string)o.name).ToList();
         }
 
-        protected override string GetSelectCommandTemplate(string table, IReadOnlyCollection<string> columns,
-            string orderColumn, string whereStr, int count, bool asc)
+        protected override string GetSelectCommandTemplate(string table,
+            IReadOnlyCollection<string> columns,
+            string orderColumn,
+            string whereStr,
+            int count,
+            bool asc)
         {
             var colStr = "*";
             if (columns != null && columns.Count > 0)
@@ -73,23 +60,24 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
                    (count <= 0 ? "" : $"LIMIT {count} ");
         }
 
-        protected override void GetUpdateCommandTemplate(string table, Dictionary<string, object> updateColumns,
-            string whereStr, DynamicParameters whereParams,
+        protected override void GetUpdateCommandTemplate(string table,
+            Dictionary<string, object> updateColumns,
+            string whereStr,
+            DynamicParameters whereParams,
             string orderColumn,
             int count,
-            bool asc, out string sql, out DynamicParameters kvParams)
+            bool asc,
+            out string sql,
+            out DynamicParameters @params)
         {
-            kvParams = new DynamicParameters();
-            //var s = ((ICollection<KeyValuePair<string, object>>) whereParams).ToDictionary(k => k.Key, k => k.Value);
-            var existColumn = whereParams == null ? new List<string>() : whereParams.ParameterNames.ToList();
-            //new HashSet<string>(((ICollection<KeyValuePair<string, object>>)whereParams).Select(k => k.Key));
-            //var expando = (ICollection<KeyValuePair<string, object>>)kvParams;
+            @params = new DynamicParameters();
+            var existColumn = new HashSet<string>(whereParams.ParameterNames);
             foreach (var kvp in updateColumns)
             {
                 if (!existColumn.Contains(kvp.Key))
                 {
                     existColumn.Add(kvp.Key);
-                    kvParams.Add("upd_" + kvp.Key, kvp.Value);
+                    @params.Add($"upd_{kvp.Key}", kvp.Value);
                 }
                 else
                 {
@@ -101,37 +89,37 @@ namespace Milky.OsuPlayer.Data.Dapper.Provider
                         newStr = kvp.Key + j;
                     }
 
-                    kvParams.Add("upd_" + newStr, kvp.Value);
+                    @params.Add($"upd_{newStr}", kvp.Value);
                     existColumn.Add(newStr);
                 }
             }
 
-            //var newDic = eoColl.ToDictionary(k => k.Key, k => k.Value);
             var newDic = new Dictionary<string, string>();
             var o1 = updateColumns.Keys.ToList();
-            var o2 = kvParams.ParameterNames.ToList();
+            var o2 = @params.ParameterNames.ToList();
             for (int i = 0; i < o1.Count; i++)
             {
                 newDic.Add(o1[i], o2[i]);
             }
 
-            sql = $"UPDATE {table} SET " +
-                  string.Join(",", newDic.Select(k => $"[{k.Key}]=@{k.Value}")) + " " +
+            sql = $"UPDATE `{table}` SET " +
+                  string.Join(",", newDic.Select(k => $"`{k.Key}`=@{k.Value}")) + " " +
                   $"WHERE {whereStr} ";
         }
 
-        protected override void GetInsertCommandTemplate(string table, Dictionary<string, object> insertColumns,
-            out string sql, out DynamicParameters kvParams)
+        protected override void GetInsertCommandTemplate(string table,
+            Dictionary<string, object> insertColumns,
+            out string sql,
+            out DynamicParameters @params)
         {
-            kvParams = new DynamicParameters();
-            //var eoColl = (ICollection<KeyValuePair<string, object>>)kvParams;
+            @params = new DynamicParameters();
             foreach (var kvp in insertColumns)
             {
-                kvParams.Add($"ins_{kvp.Key}", kvp.Value);
+                @params.Add($"ins_{kvp.Key}", kvp.Value);
             }
 
             sql = $"INSERT INTO {table} (" +
-                  string.Join(",", insertColumns.Keys.Select(k => $"[{k}]")) +
+                  string.Join(",", insertColumns.Keys.Select(k => $"`{k}`")) +
                   $") VALUES (" +
                   string.Join(",", insertColumns.Keys.Select(k => $"@ins_{k}")) +
                   $")";

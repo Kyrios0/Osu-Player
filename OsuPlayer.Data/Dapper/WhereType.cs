@@ -7,6 +7,9 @@
         Less,
         LessOrEqual,
         GreaterOrEqual,
-        Greater
+        Greater,
+        LikeAtEnd,
+        LikeAtBegin,
+        LikeAll
     }
 }

@@ -4,6 +4,7 @@ using Milky.OsuPlayer.Pages;
 using Milky.OsuPlayer.Presentation.Interaction;
 using Milky.OsuPlayer.Presentation.ObjectModel;
 using Milky.OsuPlayer.Shared;
+using Milky.OsuPlayer.UiComponents.NotificationComponent;
 using Milky.OsuPlayer.Utils;
 using OSharp.Beatmap.MetaData;
 using System;
@@ -14,7 +15,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
-using Milky.OsuPlayer.UiComponents.NotificationComponent;
 
 namespace Milky.OsuPlayer.ViewModels
 {
@@ -93,7 +93,7 @@ namespace Milky.OsuPlayer.ViewModels
                 {
                     if (obj == null) return;
                     var selected = ((System.Windows.Controls.ListView)obj).SelectedItems;
-                    var entries = ConvertToEntries(selected.Cast<BeatmapDataModel>());
+                    var entries = await ConvertToEntries(selected.Cast<BeatmapDataModel>());
                     foreach (var entry in entries)
                     {
                         ExportPage.QueueEntry(entry);
@@ -140,15 +140,21 @@ namespace Milky.OsuPlayer.ViewModels
             }
         }
 
-        private Beatmap ConvertToEntry(BeatmapDataModel dataModel)
+        private async Task<Beatmap> ConvertToEntry(BeatmapDataModel dataModel)
         {
-            return SafeDbOperator.GetBeatmapsFromFolder(dataModel.FolderName)
+            return (await SafeDbOperator.GetBeatmapsFromFolder(dataModel.FolderName))
                 .FirstOrDefault(k => k.Version == dataModel.Version);
         }
 
-        private IEnumerable<Beatmap> ConvertToEntries(IEnumerable<BeatmapDataModel> dataModels)
+        private async Task<IEnumerable<Beatmap>> ConvertToEntries(IEnumerable<BeatmapDataModel> dataModels)
         {
-            return dataModels.Select(ConvertToEntry);
+            var list = new List<Beatmap>();
+            foreach (var dataModel in dataModels)
+            {
+                list.Add(await ConvertToEntry(dataModel));
+            }
+
+            return list;
         }
 
         private void InnerUpdate()

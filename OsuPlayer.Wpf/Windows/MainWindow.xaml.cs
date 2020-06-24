@@ -315,7 +315,7 @@ namespace Milky.OsuPlayer.Windows
             }
             else
             {
-                var current = _safeDbOperator.GetBeatmapByIdentifiable(AppSettings.Default.CurrentMap);
+                var current = await _safeDbOperator.GetBeatmapByIdentifiable(AppSettings.Default.CurrentMap);
                 if (current == null) return;
                 await _controller.PlayNewAsync(current, play);
             }
@@ -409,10 +409,10 @@ namespace Milky.OsuPlayer.Windows
             MainFrame.Content = null;
         }
 
-        private void Controller_LikeClicked(object sender, RoutedEventArgs e)
+        private async void Controller_LikeClicked(object sender, RoutedEventArgs e)
         {
             var detail = _controller.PlayList.CurrentInfo.Beatmap;
-            var entry = _safeDbOperator.GetBeatmapByIdentifiable(detail.GetIdentity());
+            var entry = await _safeDbOperator.GetBeatmapByIdentifiable(detail.GetIdentity());
             if (entry == null) return;
 
             FrontDialogOverlay.Default.ShowContent(new SelectCollectionControl(entry),

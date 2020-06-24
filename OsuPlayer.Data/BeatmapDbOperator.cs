@@ -6,7 +6,6 @@ using OSharp.Beatmap.MetaData;
 using osu_database_reader.Components.Beatmaps;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -20,33 +19,27 @@ namespace Milky.OsuPlayer.Data
 
         public static List<Beatmap> SearchBeatmapByOptions(this AppDbOperator op, string searchText, BeatmapSortMode beatmapSortMode, int startIndex, int count)
         {
-            var expando = new DynamicParameters();
+            var dp = new DynamicParameters();
             var command = " SELECT * FROM beatmap WHERE ";
-            var keywordSql = GetKeywordQueryAndArgs(searchText, ref expando);
+            var keywordSql = GetKeywordQueryAndArgs(searchText, ref dp);
             var sort = GetOrderAndTakeQueryAndArgs(beatmapSortMode, startIndex, count);
-            var sw = Stopwatch.StartNew();
             try
             {
-                return op.ThreadedProvider.GetDbConnection().Query<Beatmap>(command + keywordSql + sort, expando)
+                return op.ThreadedProvider.GetDbConnection().Query<Beatmap>(command + keywordSql + sort, dp)
                     .ToList();
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "Error while calling SearchBeatmapByOptions().");
+                Logger.Error(ex, $"Error while calling {nameof(SearchBeatmapByOptions)}().");
                 throw;
-            }
-            finally
-            {
-                Logger.Debug("查询花费: {0}", sw.ElapsedMilliseconds);
-                sw.Stop();
             }
         }
 
-        public static List<Beatmap> GetAllBeatmaps(this AppDbOperator op)
+        public static async Task<List<Beatmap>> GetAllBeatmaps(this AppDbOperator op)
         {
             try
             {
-                return op.ThreadedProvider.Query<Beatmap>(TABLE_BEATMAP).ToList();
+                return (await op.ThreadedProvider.QueryAsync<Beatmap>(TABLE_BEATMAP).ConfigureAwait(false)).ToList();
             }
             catch (Exception ex)
             {
@@ -55,17 +48,17 @@ namespace Milky.OsuPlayer.Data
             }
         }
 
-        public static Beatmap GetBeatmapByIdentifiable(this AppDbOperator op, IMapIdentifiable id)
+        public static async Task<Beatmap> GetBeatmapByIdentifiable(this AppDbOperator op, IMapIdentifiable id)
         {
             try
             {
-                return op.ThreadedProvider.Query<Beatmap>(TABLE_BEATMAP,
+                return (await op.ThreadedProvider.QueryAsync<Beatmap>(TABLE_BEATMAP,
                     new Where[]
                     {
                         ("version", id.Version),
                         ("folderName", id.FolderName)
                     },
-                    count: 1).FirstOrDefault();
+                    count: 1).ConfigureAwait(false)).FirstOrDefault();
             }
             catch (Exception ex)
             {
@@ -93,11 +86,13 @@ namespace Milky.OsuPlayer.Data
                 : newList.OrderByDescending(k => k.addTime).Select(k => k.entry).ToList();
         }
 
-        public static List<Beatmap> GetBeatmapsFromFolder(this AppDbOperator op, string folder)
+        public static async Task<List<Beatmap>> GetBeatmapsFromFolder(this AppDbOperator op, string folder)
         {
             try
             {
-                return op.ThreadedProvider.Query<Beatmap>(TABLE_BEATMAP, ("folderName", folder)).ToList();
+                return (await op.ThreadedProvider.QueryAsync<Beatmap>(TABLE_BEATMAP, ("folderName", folder))
+                        .ConfigureAwait(false)
+                    ).ToList();
             }
             catch (Exception ex)
             {
@@ -166,48 +161,42 @@ SELECT *
             Exception exc = null;
             if (addOnly)
             {
-                await Task.Run(() =>
+                try
                 {
-                    try
-                    {
-                        var dbMaps = op.ThreadedProvider.Query<Beatmap>(TABLE_BEATMAP, ("own", false));
-                        var newList = entry.Select(BeatmapExtension.ParseFromHolly);
-                        var except = newList.Except(dbMaps, new Beatmap.Comparer(true));
+                    var dbMaps = await op.ThreadedProvider.QueryAsync<Beatmap>(TABLE_BEATMAP, ("own", false));
+                    var newList = entry.Select(BeatmapExtension.ParseFromHolly);
+                    var except = newList.Except(dbMaps, new Beatmap.Comparer(true));
 
-                        AddNewMaps(op, except);
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Error(ex, "Error while calling SyncMapsFromHoLLyAsync(addonly).");
-                        exc = ex;
-                    }
-                }).ConfigureAwait(false);
+                    await AddNewMaps(op, except).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "Error while calling SyncMapsFromHoLLyAsync(addonly).");
+                    exc = ex;
+                }
             }
             else
             {
-                await Task.Run(() =>
+                try
                 {
-                    try
-                    {
-                        RemoveSyncedAll(op);
+                    await RemoveSyncedAll(op);
 
-                        var osuMaps = entry.Select(BeatmapExtension.ParseFromHolly);
-                        AddNewMaps(op, osuMaps);
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Error(ex, "Error while calling SyncMapsFromHoLLyAsync().");
-                        exc = ex;
-                    }
-                }).ConfigureAwait(false);
+                    var osuMaps = entry.Select(BeatmapExtension.ParseFromHolly);
+                    await AddNewMaps(op, osuMaps).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "Error while calling SyncMapsFromHoLLyAsync().");
+                    exc = ex;
+                }
             }
 
             if (exc != null) throw exc;
         }
 
-        public static void AddNewMaps(this AppDbOperator op, IEnumerable<Beatmap> beatmaps)
+        public static async Task AddNewMaps(this AppDbOperator op, IEnumerable<Beatmap> beatmaps)
         {
-            op.ThreadedProvider.InsertArray(TABLE_BEATMAP, beatmaps.Select(k => new Dictionary<string, object>
+            await op.ThreadedProvider.InsertAsync(TABLE_BEATMAP, beatmaps.Select(k => new Dictionary<string, object>
             {
                 ["id"] = k.Id,
                 ["artist"] = k.Artist,
@@ -236,19 +225,19 @@ SELECT *
             }).ToList());
         }
 
-        public static void AddNewMaps(this AppDbOperator op, params Beatmap[] beatmaps)
+        public static async Task AddNewMaps(this AppDbOperator op, params Beatmap[] beatmaps)
         {
-            AddNewMaps(op, (IEnumerable<Beatmap>)beatmaps);
+            await AddNewMaps(op, (IEnumerable<Beatmap>)beatmaps);
         }
 
-        public static void RemoveLocalAll(this AppDbOperator op)
+        public static async Task RemoveLocalAll(this AppDbOperator op)
         {
-            op.ThreadedProvider.Delete(TABLE_BEATMAP, ("own", true));
+            await op.ThreadedProvider.DeleteAsync(TABLE_BEATMAP, ("own", true));
         }
 
-        public static void RemoveSyncedAll(this AppDbOperator op)
+        public static async Task RemoveSyncedAll(this AppDbOperator op)
         {
-            op.ThreadedProvider.Delete(TABLE_BEATMAP, ("own", false));
+            await op.ThreadedProvider.DeleteAsync(TABLE_BEATMAP, ("own", false));
         }
 
         private static string GetKeywordQueryAndArgs(string keywordStr, ref DynamicParameters args)

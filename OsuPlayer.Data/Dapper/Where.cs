@@ -9,10 +9,12 @@ namespace Milky.OsuPlayer.Data.Dapper
         {
             ColumnName = columnName;
             Value = value;
+            ColumnNameOther = columnName;
         }
 
         public WhereType WhereType { get; set; } = WhereType.Equal;
         public string ColumnName { get; set; }
+        public string ColumnNameOther { get; set; }
         public object Value { get; set; }
         public DbType? ForceKeyType { get; set; }
 
@@ -23,17 +25,19 @@ namespace Milky.OsuPlayer.Data.Dapper
 
         public static implicit operator Where((string columnName, object value, string type) tuple)
         {
-            return new Where(tuple.columnName, tuple.value)
+            var (columnName, value, type) = tuple;
+            return new Where(columnName, value)
             {
-                WhereType = SwitchType(tuple.type)
+                WhereType = SwitchType(type)
             };
         }
 
         public static implicit operator Where((string columnName, object value, WhereType type) tuple)
         {
-            return new Where(tuple.columnName, tuple.value)
+            var (columnName, value, type) = tuple;
+            return new Where(columnName, value)
             {
-                WhereType = tuple.type
+                WhereType = type
             };
         }
 
@@ -43,9 +47,11 @@ namespace Milky.OsuPlayer.Data.Dapper
             {
                 case "=":
                 case "==":
+                case "===":
                     return WhereType.Equal;
                 case "<>":
                 case "!=":
+                case "!==":
                     return WhereType.Unequal;
                 case "<":
                     return WhereType.Less;
@@ -55,8 +61,14 @@ namespace Milky.OsuPlayer.Data.Dapper
                     return WhereType.Greater;
                 case ">=":
                     return WhereType.GreaterOrEqual;
+                case "%like":
+                    return WhereType.LikeAtEnd;
+                case "like%":
+                    return WhereType.LikeAtBegin;
+                case "%like%":
+                    return WhereType.LikeAll;
                 default:
-                    return WhereType.Equal;
+                    throw new ArgumentOutOfRangeException(nameof(symbol), symbol, null);
             }
         }
 
@@ -76,6 +88,10 @@ namespace Milky.OsuPlayer.Data.Dapper
                     return ">=";
                 case WhereType.Greater:
                     return ">";
+                case WhereType.LikeAtEnd:
+                case WhereType.LikeAtBegin:
+                case WhereType.LikeAll:
+                    return "like";
                 default:
                     throw new ArgumentOutOfRangeException(nameof(whereType),
                         whereType, null);

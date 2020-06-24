@@ -77,10 +77,10 @@ namespace Milky.OsuPlayer.Pages
         {
             get
             {
-                return new DelegateCommand(param =>
+                return new DelegateCommand(async param =>
                 {
                     var beatmap = (BeatmapDataModel)param;
-                    var map = _safeDbOperator.GetBeatmapByIdentifiable(beatmap);
+                    var map = await _safeDbOperator.GetBeatmapByIdentifiable(beatmap);
                     if (map == null) return;
                     Process.Start($"https://osu.ppy.sh/s/{map.BeatmapSetId}");
                 });
@@ -91,10 +91,10 @@ namespace Milky.OsuPlayer.Pages
         {
             get
             {
-                return new DelegateCommand(param =>
+                return new DelegateCommand(async param =>
                 {
                     var beatmap = (BeatmapDataModel)param;
-                    var map = _safeDbOperator.GetBeatmapByIdentifiable(beatmap);
+                    var map = await _safeDbOperator.GetBeatmapByIdentifiable(beatmap);
                     if (map == null) return;
                     FrontDialogOverlay.Default.ShowContent(new SelectCollectionControl(map),
                         DialogOptionFactory.SelectCollectionOptions);
@@ -106,10 +106,10 @@ namespace Milky.OsuPlayer.Pages
         {
             get
             {
-                return new DelegateCommand(param =>
+                return new DelegateCommand(async param =>
                 {
                     var beatmap = (BeatmapDataModel)param;
-                    var map = _safeDbOperator.GetBeatmapByIdentifiable(beatmap);
+                    var map = await _safeDbOperator.GetBeatmapByIdentifiable(beatmap);
                     if (map == null) return;
                     ExportPage.QueueEntry(map);
                 });
@@ -123,7 +123,7 @@ namespace Milky.OsuPlayer.Pages
                 return new DelegateCommand(async param =>
                 {
                     var beatmap = (BeatmapDataModel)param;
-                    var map = _safeDbOperator.GetBeatmapByIdentifiable(beatmap);
+                    var map = await _safeDbOperator.GetBeatmapByIdentifiable(beatmap);
                     if (map == null) return;
                     await _controller.PlayNewAsync(map);
                 });
@@ -137,7 +137,7 @@ namespace Milky.OsuPlayer.Pages
                 return new DelegateCommand(async param =>
                 {
                     var beatmap = (BeatmapDataModel)param;
-                    var map = _safeDbOperator.GetBeatmapByIdentifiable(beatmap);
+                    var map = await _safeDbOperator.GetBeatmapByIdentifiable(beatmap);
                     if (map == null) return;
                     await _controller.PlayNewAsync(map);
                 });

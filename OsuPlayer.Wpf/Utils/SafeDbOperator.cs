@@ -6,6 +6,7 @@ using Milky.OsuPlayer.UiComponents.NotificationComponent;
 using OSharp.Beatmap.MetaData;
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace Milky.OsuPlayer.Utils
 {
@@ -13,13 +14,12 @@ namespace Milky.OsuPlayer.Utils
     {
         private readonly AppDbOperator _dbOperator = new AppDbOperator();
 
-        [CanBeNull]
-        public Beatmap GetBeatmapByIdentifiable(IMapIdentifiable beatmap)
+        public async Task<Beatmap> GetBeatmapByIdentifiable(IMapIdentifiable beatmap)
         {
             Beatmap map;
             try
             {
-                map = _dbOperator.GetBeatmapByIdentifiable(beatmap);
+                map = await _dbOperator.GetBeatmapByIdentifiable(beatmap);
                 if (map is null)
                 {
                     Notification.Push(I18NUtil.GetString("err-mapNotInDb"), I18NUtil.GetString("text-error"));
@@ -76,11 +76,11 @@ namespace Milky.OsuPlayer.Utils
             }
         }
 
-        public List<Beatmap> GetBeatmapsFromFolder(string folderName)
+        public async Task<List<Beatmap>> GetBeatmapsFromFolder(string folderName)
         {
             try
             {
-                return _dbOperator.GetBeatmapsFromFolder(folderName);
+                return await _dbOperator.GetBeatmapsFromFolder(folderName);
             }
             catch (Exception ex)
             {

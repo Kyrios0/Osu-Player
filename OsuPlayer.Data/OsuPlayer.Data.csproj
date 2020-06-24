@@ -70,7 +70,17 @@
     <Compile Include="BeatmapDbOperator.cs" />
     <Compile Include="Dapper\DataBaseType.cs" />
     <Compile Include="Dapper\DbPoolConfiguration.cs" />
+    <Compile Include="Dapper\ORM\ColumnAttribute.cs" />
+    <Compile Include="Dapper\ORM\ColumnMappingHelper.cs" />
+    <Compile Include="Dapper\ORM\ColumnSelector.cs" />
+    <Compile Include="Dapper\ORM\ProviderExtension.cs" />
+    <Compile Include="Dapper\ORM\TableAttribute.cs" />
+    <Compile Include="Dapper\ORM\TableMappingHelper.cs" />
+    <Compile Include="Dapper\ORM\TypeEntityMap.cs" />
+    <Compile Include="Dapper\ORM\WhereBuilder.cs" />
+    <Compile Include="Dapper\ORM\WhereQueryHelper.cs" />
     <Compile Include="Dapper\Provider\DbProviderBase.cs" />
+    <Compile Include="Dapper\Provider\DbProviderBase.Async.cs" />
     <Compile Include="Dapper\Provider\SQLiteProvider.cs" />
     <Compile Include="Dapper\Where.cs" />
     <Compile Include="Dapper\WhereType.cs" />

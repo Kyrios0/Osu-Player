@@ -5,6 +5,7 @@ using Milky.OsuPlayer.Data.Models;
 using Milky.OsuPlayer.Media.Audio.Player;
 using Milky.OsuPlayer.Media.Audio.Playlist;
 using Milky.OsuPlayer.Media.Audio.Wave;
+using Milky.OsuPlayer.Presentation.Annotations;
 using Milky.OsuPlayer.Presentation.Interaction;
 using Milky.OsuPlayer.Shared;
 using OSharp.Beatmap;
@@ -15,8 +16,6 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Milky.OsuPlayer.Presentation.Annotations;
-using Newtonsoft.Json;
 
 namespace Milky.OsuPlayer.Media.Audio
 {
@@ -97,7 +96,7 @@ namespace Milky.OsuPlayer.Media.Audio
             }
         }
 
-        public async Task PlayNewAsync([CanBeNull]Beatmap beatmap, bool playInstantly = true)
+        public async Task PlayNewAsync([CanBeNull] Beatmap beatmap, bool playInstantly = true)
         {
             if (beatmap is null) return;
             PlayList.AddOrSwitchTo(beatmap);
@@ -133,7 +132,7 @@ namespace Milky.OsuPlayer.Media.Audio
                 context.OsuFile = osuFile;
 
                 var beatmap = BeatmapExtension.ParseFromOSharp(osuFile);
-                Beatmap trueBeatmap = _appDbOperator.GetBeatmapByIdentifiable(beatmap);
+                Beatmap trueBeatmap = await _appDbOperator.GetBeatmapByIdentifiable(beatmap).ConfigureAwait(false);
                 if (trueBeatmap == null)
                 {
                     trueBeatmap = beatmap;
